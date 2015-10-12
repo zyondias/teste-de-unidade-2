@@ -20,6 +20,7 @@ public class EncerradorDeLeilaoTest {
 
 	private RepositorioDeLeiloes leilaoDaoMock;
 	private EnviadorDeEmail enviadorDeEmailMock;
+	private EncerradorDeLeilao encerradorDeLeilao;
 
 	@Before
 	public void setUp() {
@@ -27,6 +28,10 @@ public class EncerradorDeLeilaoTest {
 		// instanciando mocks
 		leilaoDaoMock = mock(RepositorioDeLeiloes.class);
 		enviadorDeEmailMock = mock(EnviadorDeEmail.class);
+
+		// inserindo a dependencia da class com a class mockada
+		encerradorDeLeilao = new EncerradorDeLeilao(leilaoDaoMock,
+				enviadorDeEmailMock);
 	}
 
 	@Test
@@ -43,9 +48,6 @@ public class EncerradorDeLeilaoTest {
 		// inserindo comportamento para quando algum metodo chamado na class
 		// mockada
 		when(leilaoDaoMock.correntes()).thenReturn(leiloes);
-		// inserindo a dependencia da class com a class mockada
-		EncerradorDeLeilao encerradorDeLeilao = new EncerradorDeLeilao(
-				leilaoDaoMock, enviadorDeEmailMock);
 		// encerando leiloes antigos
 		encerradorDeLeilao.encerra();
 
@@ -69,9 +71,6 @@ public class EncerradorDeLeilaoTest {
 		// inserindo comportamento para quando algum metodo chamado na class
 		// mockada
 		when(leilaoDaoMock.correntes()).thenReturn(leiloes);
-		// inserindo a dependencia da class com a class mockada
-		EncerradorDeLeilao encerradorDeLeilao = new EncerradorDeLeilao(
-				leilaoDaoMock, enviadorDeEmailMock);
 		// encerando leiloes antigos
 		encerradorDeLeilao.encerra();
 
@@ -88,9 +87,6 @@ public class EncerradorDeLeilaoTest {
 		// inserindo comportamento para quando algum metodo chamado na class
 		// mockada
 		when(leilaoDaoMock.correntes()).thenReturn(new ArrayList<Leilao>());
-		// inserindo a dependencia da class com a class mockada
-		EncerradorDeLeilao encerradorDeLeilao = new EncerradorDeLeilao(
-				leilaoDaoMock, enviadorDeEmailMock);
 		// encerando leiloes antigos
 		encerradorDeLeilao.encerra();
 
@@ -101,17 +97,14 @@ public class EncerradorDeLeilaoTest {
 	@Test
 	public void metodoAtualizaDeveSerChamado() {
 		// criando variaveis de entrada
-		Calendar ontem = Calendar.getInstance();
-		ontem.add(Calendar.WEEK_OF_MONTH, -1);
+		Calendar semanaPassada = Calendar.getInstance();
+		semanaPassada.add(Calendar.WEEK_OF_MONTH, -1);
 		Leilao leilao1 = new CriadorDeLeilao().para("Playstation 4")
-				.naData(ontem).constroi();
+				.naData(semanaPassada).constroi();
 
 		// inserindo comportamento para quando algum metodo chamado na class
 		// mockada
 		when(leilaoDaoMock.correntes()).thenReturn(Arrays.asList(leilao1));
-		// inserindo a dependencia da class com a class mockada
-		EncerradorDeLeilao encerradorDeLeilao = new EncerradorDeLeilao(
-				leilaoDaoMock, enviadorDeEmailMock);
 		// encerando leiloes antigos
 		encerradorDeLeilao.encerra();
 
@@ -122,17 +115,15 @@ public class EncerradorDeLeilaoTest {
 	@Test
 	public void garantindoOrdemDasChamadasDeDaoEEmail() {
 		// criando variaveis de entrada
-		Calendar ontem = Calendar.getInstance();
-		ontem.add(Calendar.WEEK_OF_MONTH, -1);
+		Calendar semanaPassada = Calendar.getInstance();
+		semanaPassada.add(Calendar.WEEK_OF_MONTH, -1);
 		Leilao leilao1 = new CriadorDeLeilao().para("Playstation 4")
-				.naData(ontem).constroi();
+				.naData(semanaPassada).constroi();
 
 		// inserindo comportamento para quando algum metodo chamado na class
 		// mockada
 		when(leilaoDaoMock.correntes()).thenReturn(Arrays.asList(leilao1));
-		// inserindo a dependencia da class com a class mockada
-		EncerradorDeLeilao encerradorDeLeilao = new EncerradorDeLeilao(
-				leilaoDaoMock, enviadorDeEmailMock);
+
 		// encerando leiloes antigos
 		encerradorDeLeilao.encerra();
 
@@ -143,6 +134,75 @@ public class EncerradorDeLeilaoTest {
 		inOrder.verify(leilaoDaoMock, times(1)).atualiza(leilao1);
 		inOrder.verify(enviadorDeEmailMock, times(1)).envia(leilao1);
 
+	}
+
+	@Test
+	public void deveContinuarCasoAlgumLeilaoDeErrorAoAtualizar() {
+		Calendar semanaPassada = Calendar.getInstance();
+		semanaPassada.add(Calendar.WEEK_OF_MONTH, -1);
+		Leilao leilao1 = new CriadorDeLeilao().para("Playstation 4")
+				.naData(semanaPassada).constroi();
+		Leilao leilao2 = new CriadorDeLeilao().para("MacBook Air")
+				.naData(semanaPassada).constroi();
+
+		// inserindo comportamentos
+		when(leilaoDaoMock.correntes()).thenReturn(
+				Arrays.asList(leilao1, leilao2));
+		doThrow(new RuntimeException()).when(leilaoDaoMock).atualiza(leilao1);
+
+		// encerando leiloes antigos
+		encerradorDeLeilao.encerra();
+
+		// validando
+		Assert.assertEquals(1, encerradorDeLeilao.getTotalEncerrados());
+		verify(enviadorDeEmailMock, times(1)).envia(leilao2);
+		verify(leilaoDaoMock, times(1)).atualiza(leilao2);
+		verify(enviadorDeEmailMock, never()).envia(leilao1);
+
+	}
+
+	@Test
+	public void deveContinuarCassoErroNoEnvioDeEmail() throws Exception {
+		Calendar semanaPassada = Calendar.getInstance();
+		semanaPassada.add(Calendar.WEEK_OF_MONTH, -1);
+		Leilao leilao1 = new CriadorDeLeilao().para("Playstation 4")
+				.naData(semanaPassada).constroi();
+		Leilao leilao2 = new CriadorDeLeilao().para("MacBook Air")
+				.naData(semanaPassada).constroi();
+
+		// inserindo comportamentos
+		when(leilaoDaoMock.correntes()).thenReturn(
+				Arrays.asList(leilao1, leilao2));
+		doThrow(new RuntimeException()).when(enviadorDeEmailMock)
+				.envia(leilao1);
+
+		// encerando leiloes antigos
+		encerradorDeLeilao.encerra();
+
+		// validando continuacao da execucao
+		verify(leilaoDaoMock, timeout(1)).atualiza(leilao2);
+		verify(enviadorDeEmailMock, timeout(1)).envia(leilao2);
+
+	}
+
+	@Test
+	public void naoEnviaEmailCasoErroParaTodosEmail() {
+		Calendar semanaPassada = Calendar.getInstance();
+		semanaPassada.add(Calendar.WEEK_OF_MONTH, -1);
+		Leilao leilao1 = new CriadorDeLeilao().para("Playstation 4")
+				.naData(semanaPassada).constroi();
+		Leilao leilao2 = new CriadorDeLeilao().para("MacBook Air")
+				.naData(semanaPassada).constroi();
+		// inserindo comportamentos
+		when(leilaoDaoMock.correntes()).thenReturn(
+				Arrays.asList(leilao1, leilao2));
+		//utlizando any para dizer que qualquer instancia de Leilao vai gerar RunTime
+		doThrow(new RuntimeException()).when(leilaoDaoMock).atualiza(any(Leilao.class));
+
+		// encerando leiloes antigos
+		encerradorDeLeilao.encerra();
+		
+		verify(enviadorDeEmailMock, never()).envia(any(Leilao.class));
 	}
 
 }
